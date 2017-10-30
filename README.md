@@ -34,7 +34,7 @@ See the [DEAP User's Guide](http://deap.readthedocs.org/) for DEAP documentation
 In order to get the tip documentation, change directory to the `doc` subfolder and type in `make html`, the documentation will be under `_build/html`. You will need [Sphinx](http://sphinx.pocoo.org) to build the documentation.
 
 ### Notebooks
-Also checkout our new [notebook examples](https://github.com/DEAP/notebooks). Using [IPython's](http://ipython.org/) notebook feature you'll be able to navigate and execute each block of code individually and fell what every line is doing. Either, look at the notebooks online using the notebook viewer links at the botom of the page or download the notebooks, navigate to the you download directory and run
+Also checkout our new [notebook examples](https://github.com/DEAP/notebooks). Using [IPython's](http://ipython.org/) notebook feature you'll be able to navigate and execute each block of code individually and tell what every line is doing. Either, look at the notebooks online using the notebook viewer links at the botom of the page or download the notebooks, navigate to the you download directory and run
 
 ```bash
 ipython notebook --pylab inline
@@ -42,9 +42,13 @@ ipython notebook --pylab inline
 
 ## Installation
 We encourage you to use easy_install or pip to install DEAP on your system. Other installation procedure like apt-get, yum, etc. usually provide an outdated version.
-
 ```bash
 pip install deap
+```
+
+The latest version can be installed with 
+```bash
+pip install git+https://github.com/DEAP/deap@master
 ```
 
 If you wish to build from sources, download or clone the repository and type
@@ -141,5 +145,6 @@ Authors of scientific papers including results generated using DEAP are encourag
   * DEAP is used in [TPOT](https://github.com/rhiever/tpot), an open source tool that uses genetic programming to optimize machine learning pipelines.
   * DEAP is also used in ROS as an optimization package http://www.ros.org/wiki/deap.
   * DEAP is an optional dependency for [PyXRD](https://github.com/mathijs-dumon/PyXRD), a Python implementation of the matrix algorithm developed for the X-ray diffraction analysis of disordered lamellar structures.
+  * DEAP is used in [glyph](https://github.com/Ambrosys/glyph), a library for symbolic regression with applications to [MLC](https://en.wikipedia.org/wiki/Machine_learning_control).
 
 If you want your project listed here, send us a link and a brief description and we'll be glad to add it.
