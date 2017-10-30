@@ -188,15 +188,16 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, stats=None,
 
     return population, logbook
 
-def eaSimpleCoevolve(population, toolbox, cxpb, mutpb, ngen, stats=None,
+def eaCoevolve(population, toolbox, cxpb, mutpb, ngen, stats=None,
                         halloffame=None, verbose=__debug__):
     logbook = tools.Logbook()
     logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
 
     # Evaluate the individuals with an invalid fitness
     invalid_ind = [ind for ind in population if not ind.fitness.valid]
-    fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-    for ind, fit in zip(invalid_ind, fitnesses):
+    #fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+    fitnesses = toolbox.evaluate(population)
+    for ind, fit in zip(population, fitnesses):
         ind.fitness.values = fit
 
     if halloffame is not None:
@@ -207,6 +208,8 @@ def eaSimpleCoevolve(population, toolbox, cxpb, mutpb, ngen, stats=None,
     if verbose:
         print logbook.stream
 
+    history = []
+
     # Begin the generational process
     for gen in range(1, ngen + 1):
         # Select the next generation individuals
@@ -216,10 +219,10 @@ def eaSimpleCoevolve(population, toolbox, cxpb, mutpb, ngen, stats=None,
         offspring = varAnd(offspring, toolbox, cxpb, mutpb)
 
         # Evaluate the individuals with an invalid fitness
-        invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+        #invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
         #fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-        fitnesses = toolbox.evaluate(invalid_ind)
-        for ind, fit in zip(invalid_ind, fitnesses):
+        fitnesses = toolbox.evaluate(offspring)
+        for ind, fit in zip(offspring, fitnesses):
             ind.fitness.values = fit
 
         # Update the hall of fame with the generated individuals
@@ -228,6 +231,7 @@ def eaSimpleCoevolve(population, toolbox, cxpb, mutpb, ngen, stats=None,
 
         # Replace the current population by the offspring
         population[:] = offspring
+        history.append(population[:])
 
         # Append the current generation statistics to the logbook
         record = stats.compile(population) if stats else {}
@@ -235,7 +239,7 @@ def eaSimpleCoevolve(population, toolbox, cxpb, mutpb, ngen, stats=None,
         if verbose:
             print logbook.stream
 
-    return population, logbook
+    return population, logbook, history 
 
 def varOr(population, toolbox, lambda_, cxpb, mutpb):
     """Part of an evolutionary algorithm applying only the variation part
