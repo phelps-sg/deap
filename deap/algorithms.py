@@ -44,6 +44,13 @@ class SimpleEvolutionaryAlgorithm(object):
         self.halloffame = halloffame
         self.stats = stats
         self.logger = logging.getLogger('EvolutionaryAlgorithm')
+        self.generation_number = 0
+        self.init_logbook()
+
+
+    def init_logbook(self):
+        self.logbook = deap.tools.Logbook()
+        self.logbook.header = ['gen', 'nevals'] + (self.stats.fields if self.stats else [])
 
 
     def varOr(self, lambda_):
@@ -143,6 +150,41 @@ class SimpleEvolutionaryAlgorithm(object):
         return offspring
 
 
+    def update_hall_of_fame(self):
+        if self.halloffame is not None:
+            self.halloffame.update(self.population)
+
+
+    def update_stats(self, num_evaluations):
+        record = self.stats.compile(self.population) if self.stats else {}
+        self.logbook.record(gen=self.generation_number, nevals=num_evaluations, **record)
+        self.logger.debug(self.logbook.stream)
+
+
+    def non_evaluated_individuals(self, individuals):
+        return [ind for ind in individuals if not ind.fitness.valid]
+
+
+    def compute_fitnesses(self, individuals):
+        fitnesses = self.toolbox.map(self.toolbox.evaluate, individuals)
+        for individual, fitness in zip(individuals, fitnesses):
+            individual.fitness.values = fitness
+        return len(individuals)
+
+
+    def evaluate_individuals(self, individuals):
+        self.update_stats(self.compute_fitnesses(self.non_evaluated_individuals(individuals)))
+        self.update_hall_of_fame()
+
+
+    def evaluate_population(self):
+        self.evaluate_individuals(self.population)
+
+
+    def breed(self):
+        return self.varAnd(self.toolbox.select(self.population, len(self.population)))
+
+
     def evolve(self, ngen):
         """This algorithm reproduce the simplest evolutionary algorithm as
         presented in chapter 7 of [Back2000]_.
@@ -189,54 +231,18 @@ class SimpleEvolutionaryAlgorithm(object):
         .. [Back2000] Back, Fogel and Michalewicz, "Evolutionary Computation 1 :
            Basic Algorithms and Operators", 2000.
         """
-        logbook = deap.tools.Logbook()
-        logbook.header = ['gen', 'nevals'] + (self.stats.fields if self.stats else [])
 
-        # Evaluate the individuals with an invalid fitness
-        invalid_ind = [ind for ind in self.population if not ind.fitness.valid]
-        fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind)
-        for ind, fit in zip(invalid_ind, fitnesses):
-            ind.fitness.values = fit
-
-        if self.halloffame is not None:
-            self.halloffame.update(self.population)
-
-        record = self.stats.compile(self.population) if self.stats else {}
-        logbook.record(gen=0, nevals=len(invalid_ind), **record)
-        self.logger.debug(logbook.stream)
-
-        # Begin the generational process
-        for gen in range(1, ngen + 1):
-            # Select the next generation individuals
-            offspring = self.toolbox.select(self.population, len(self.population))
-
-            # Vary the pool of individuals
-            offspring = self.varAnd()
-
-            # Evaluate the individuals with an invalid fitness
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind)
-            for ind, fit in zip(invalid_ind, fitnesses):
-                ind.fitness.values = fit
-
-            # Update the hall of fame with the generated individuals
-            if self.halloffame is not None:
-                self.halloffame.update(offspring)
-
-            # Replace the current population by the offspring
+        self.evaluate_population()
+        for self.generation_number in range(1, ngen + 1):
+            offspring = self.breed()
+            self.evaluate_individuals(offspring)
             self.population[:] = offspring
-
-            # Append the current generation statistics to the logbook
-            record = self.stats.compile(self.population) if self.stats else {}
-            logbook.record(gen=gen, nevals=len(invalid_ind), **record)
-            self.logger.debug(logbook.stream)
-
-        return self.population, logbook
 
 
 class CoevolutionaryAlgorithm(SimpleEvolutionaryAlgorithm):
 
     def evolve(self, ngen):
+
         logbook = deap.tools.Logbook()
         logbook.header = ['gen', 'nevals'] + (self.stats.fields if self.stats else [])
 
@@ -326,24 +332,12 @@ class EvolutionStrategies(SimpleEvolutionaryAlgorithm):
         registered in the toolbox. This algorithm uses the :func:`varOr`
         variation.
         """
-        logbook = deap.tools.Logbook()
-        logbook.header = ['gen', 'nevals'] + (self.stats.fields if self.stats else [])
 
-        # Evaluate the individuals with an invalid fitness
-        invalid_ind = [ind for ind in self.population if not ind.fitness.valid]
-        fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind)
-        for ind, fit in zip(invalid_ind, fitnesses):
-            ind.fitness.values = fit
-
-        if self.halloffame is not None:
-            self.halloffame.update(self.population)
-
-        record = self.stats.compile(self.population) if self.stats is not None else {}
-        logbook.record(gen=0, nevals=len(invalid_ind), **record)
-        self.logger.debug(logbook.stream)
+        self.evaluate_population()
 
         # Begin the generational process
-        for gen in range(1, ngen + 1):
+        for self.generation_number in range(1, ngen + 1):
+
             # Vary the population
             offspring = self.varOr(self.lambda_)
 
