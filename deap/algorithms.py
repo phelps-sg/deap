@@ -185,6 +185,10 @@ class SimpleEvolutionaryAlgorithm(object):
         return self.varAnd(self.toolbox.select(self.population, len(self.population)))
 
 
+    def replace_population(self,offspring):
+        self.population[:] = offspring
+
+
     def evolve(self, ngen):
         """This algorithm reproduce the simplest evolutionary algorithm as
         presented in chapter 7 of [Back2000]_.
@@ -192,32 +196,7 @@ class SimpleEvolutionaryAlgorithm(object):
         :param ngen: The number of generation.
 
         The algorithm takes in a population and evolves it in place using the
-        :meth:`varAnd` method. It returns the optimized population and a
-        :class:`~deap.tools.Logbook` with the statistics of the evolution. The
-        logbook will contain the generation number, the number of evalutions for
-        each generation and the statistics if a :class:`~deap.tools.Statistics` is
-        given as argument. The *cxpb* and *mutpb* arguments are passed to the
-        :func:`varAnd` function. The pseudocode goes as follow ::
-
-            evaluate(population)
-            for g in range(ngen):
-                population = select(population, len(population))
-                offspring = varAnd(population, toolbox, cxpb, mutpb)
-                evaluate(offspring)
-                population = offspring
-
-        As stated in the pseudocode above, the algorithm goes as follow. First, it
-        evaluates the individuals with an invalid fitness. Second, it enters the
-        generational loop where the selection procedure is applied to entirely
-        replace the parental population. The 1:1 replacement ratio of this
-        algorithm **requires** the selection procedure to be stochastic and to
-        select multiple times the same individual, for example,
-        :func:`~deap.tools.selTournament` and :func:`~deap.tools.selRoulette`.
-        Third, it applies the :func:`varAnd` function to produce the next
-        generation population. Fourth, it evaluates the new individuals and
-        compute the statistics on this population. Finally, when *ngen*
-        generations are done, the algorithm returns a tuple with the final
-        population and a :class:`~deap.tools.Logbook` of the evolution.
+        :meth:`varAnd` method.
 
         .. note::
 
@@ -236,7 +215,35 @@ class SimpleEvolutionaryAlgorithm(object):
         for self.generation_number in range(1, ngen + 1):
             offspring = self.breed()
             self.evaluate_individuals(offspring)
-            self.population[:] = offspring
+            self.replace_population(offspring)
+
+
+class EvolutionStrategies(SimpleEvolutionaryAlgorithm):
+
+    """
+    This is the :math:`(\mu + \lambda)` evolutionary algorithm.
+    """
+
+    def __init__(self, population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_):
+        SimpleEvolutionaryAlgorithm.__init__(self, population, toolbox, cxpb, mutpb, stats, halloffame)
+        self.mu = mu
+        self.lambda_ = lambda_
+
+    def breed(self):
+        return self.varOr(self.population, self.lambda_)
+
+    def replace_population(self, offspring):
+        self.population[:] = self.toolbox.select(self.population + offspring, self.mu)
+
+
+class EvolutionStrategiesMuCommaLambda(EvolutionStrategies):
+
+    """
+    This is the :math:`(\mu~,~\lambda)` evolutionary algorithm.
+    """
+
+    def replace_population(self, offspring):
+        self.population[:] = self.toolbox.select(offspring, self.mu)
 
 
 class CoevolutionaryAlgorithm(SimpleEvolutionaryAlgorithm):
@@ -292,164 +299,6 @@ class CoevolutionaryAlgorithm(SimpleEvolutionaryAlgorithm):
 
         return self.population, logbook, history
 
-
-class EvolutionStrategies(SimpleEvolutionaryAlgorithm):
-
-    def __init__(self, population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_):
-        SimpleEvolutionaryAlgorithm.__init__(self, population, toolbox, cxpb, mutpb, stats, halloffame)
-        self.mu = mu
-        self.lambda_ = lambda_
-
-    def evolve(self, ngen):
-        """This is the :math:`(\mu + \lambda)` evolutionary algorithm.
-
-        :param ngen: The number of generation.
-
-        The algorithm takes in a population and evolves it in place using the
-        :func:`varOr` function. It returns the optimized population and a
-        :class:`~deap.tools.Logbook` with the statistics of the evolution. The
-        logbook will contain the generation number, the number of evalutions for
-        each generation and the statistics if a :class:`~deap.tools.Statistics` is
-        given as argument. The *cxpb* and *mutpb* arguments are passed to the
-        :func:`varOr` function. The pseudocode goes as follow ::
-
-            evaluate(population)
-            for g in range(ngen):
-                offspring = varOr(population, toolbox, lambda_, cxpb, mutpb)
-                evaluate(offspring)
-                population = select(population + offspring, mu)
-
-        First, the individuals having an invalid fitness are evaluated. Second,
-        the evolutionary loop begins by producing *lambda_* offspring from the
-        population, the offspring are generated by the :func:`varOr` function. The
-        offspring are then evaluated and the next generation population is
-        selected from both the offspring **and** the population. Finally, when
-        *ngen* generations are done, the algorithm returns a tuple with the final
-        population and a :class:`~deap.tools.Logbook` of the evolution.
-
-        This function expects :meth:`toolbox.mate`, :meth:`toolbox.mutate`,
-        :meth:`toolbox.select` and :meth:`toolbox.evaluate` aliases to be
-        registered in the toolbox. This algorithm uses the :func:`varOr`
-        variation.
-        """
-
-        self.evaluate_population()
-
-        # Begin the generational process
-        for self.generation_number in range(1, ngen + 1):
-
-            # Vary the population
-            offspring = self.varOr(self.lambda_)
-
-            # Evaluate the individuals with an invalid fitness
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind)
-            for ind, fit in zip(invalid_ind, fitnesses):
-                ind.fitness.values = fit
-
-            # Update the hall of fame with the generated individuals
-            if self.halloffame is not None:
-                self.halloffame.update(offspring)
-
-            # Select the next generation population
-            self.population[:] = self.toolbox.select(self.population + offspring, self.mu)
-
-            # Update the statistics with the new population
-            record = self.stats.compile(self.population) if self.stats is not None else {}
-            logbook.record(gen=gen, nevals=len(invalid_ind), **record)
-            self.logger.debug(logbook.stream)
-
-        return self.population, logbook
-
-
-class EvolutionStrategiesMuCommaLambda(EvolutionStrategies):
-
-
-    def evolve(self, ngen):
-        """This is the :math:`(\mu~,~\lambda)` evolutionary algorithm.
-
-        :param ngen: The number of generation.
-        :returns: The final population
-        :returns: A class:`~deap.tools.Logbook` with the statistics of the
-                  evolution
-
-        The algorithm takes in a population and evolves it in place using the
-        :func:`varOr` function. It returns the optimized population and a
-        :class:`~deap.tools.Logbook` with the statistics of the evolution. The
-        logbook will contain the generation number, the number of evalutions for
-        each generation and the statistics if a :class:`~deap.tools.Statistics` is
-        given as argument. The *cxpb* and *mutpb* arguments are passed to the
-        :func:`varOr` function. The pseudocode goes as follow ::
-
-            evaluate(population)
-            for g in range(ngen):
-                offspring = varOr(population, toolbox, lambda_, cxpb, mutpb)
-                evaluate(offspring)
-                population = select(offspring, mu)
-
-        First, the individuals having an invalid fitness are evaluated. Second,
-        the evolutionary loop begins by producing *lambda_* offspring from the
-        population, the offspring are generated by the :func:`varOr` function. The
-        offspring are then evaluated and the next generation population is
-        selected from **only** the offspring. Finally, when
-        *ngen* generations are done, the algorithm returns a tuple with the final
-        population and a :class:`~deap.tools.Logbook` of the evolution.
-
-        .. note::
-
-            Care must be taken when the lambda:mu ratio is 1 to 1 as a
-            non-stochastic selection will result in no selection at all as the
-            operator selects *lambda* individuals from a pool of *mu*.
-
-
-        This function expects :meth:`toolbox.mate`, :meth:`toolbox.mutate`,
-        :meth:`toolbox.select` and :meth:`toolbox.evaluate` aliases to be
-        registered in the toolbox. This algorithm uses the :func:`varOr`
-        variation.
-        """
-        assert self.lambda_ >= self.mu, "lambda must be greater or equal to mu."
-
-        # Evaluate the individuals with an invalid fitness
-        invalid_ind = [ind for ind in self.population if not ind.fitness.valid]
-        fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind)
-        for ind, fit in zip(invalid_ind, fitnesses):
-            ind.fitness.values = fit
-
-        if self.halloffame is not None:
-            self.halloffame.update(self.population)
-
-        logbook = deap.tools.Logbook()
-        logbook.header = ['gen', 'nevals'] + (self.stats.fields if self.stats else [])
-
-        record = self.stats.compile(self.population) if self.stats is not None else {}
-        logbook.record(gen=0, nevals=len(invalid_ind), **record)
-        self.logger.debug(logbook.stream)
-
-        # Begin the generational process
-        for gen in range(1, ngen + 1):
-            # Vary the population
-            offspring = self.varOr(self.lambda_)
-
-            # Evaluate the individuals with an invalid fitness
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind)
-            for ind, fit in zip(invalid_ind, fitnesses):
-                ind.fitness.values = fit
-
-            # Update the hall of fame with the generated individuals
-            if self.halloffame is not None:
-                self.halloffame.update(offspring)
-
-            # Select the next generation population
-            self.population[:] = self.toolbox.select(offspring, self.mu)
-
-            # Update the statistics with the new population
-            record = self.stats.compile(self.population) if self.stats is not None else {}
-            logbook.record(gen=gen, nevals=len(invalid_ind), **record)
-
-            self.logger.debug(logbook.stream)
-
-        return self.population, logbook
 
 
     # def eaGenerateUpdate(toolbox, ngen, halloffame=None, stats=None,
