@@ -29,12 +29,14 @@ import random
 import logging
 import deap.tools
 
+from abc import ABC, abstractmethod
+
 LOG_FORMAT = '%(asctime)-15s %(message)s'
 
 logging.basicConfig(format=LOG_FORMAT, level=logging.DEBUG)
 
 
-class SimpleEvolutionaryAlgorithm(object):
+class EvolutionaryAlgorithm(ABC):
 
     def __init__(self, population, toolbox, cxpb, mutpb, stats, halloffame):
         self.population = population
@@ -45,13 +47,10 @@ class SimpleEvolutionaryAlgorithm(object):
         self.stats = stats
         self.logger = logging.getLogger('EvolutionaryAlgorithm')
         self.generation_number = 0
-        self.init_logbook()
-
-
-    def init_logbook(self):
         self.logbook = deap.tools.Logbook()
         self.logbook.header = ['gen', 'nevals'] + (self.stats.fields if self.stats else [])
-
+        self.evaluator = lambda toolbox, individuals: toolbox.map(toolbox.evaluate, individuals)
+        self.fitness_needs_computing = lambda individual: not individual.fitness.valid
 
     def varOr(self, lambda_):
         """Part of an evolutionary algorithm applying only the variation part
@@ -100,8 +99,9 @@ class SimpleEvolutionaryAlgorithm(object):
             else:                           # Apply reproduction
                 offspring.append(random.choice(self.population))
 
-        return offspring
+        assert len(offspring) == lambda_
 
+        return offspring
 
     def varAnd(self):
         """Part of an evolutionary algorithm applying only the variation part
@@ -149,45 +149,35 @@ class SimpleEvolutionaryAlgorithm(object):
 
         return offspring
 
-
     def update_hall_of_fame(self):
         if self.halloffame is not None:
             self.halloffame.update(self.population)
 
-
-    def update_stats(self, num_evaluations):
-        record = self.stats.compile(self.population) if self.stats else {}
-        self.logbook.record(gen=self.generation_number, nevals=num_evaluations, **record)
+    def update_stats(self, individuals):
+        record = self.stats.compile(individuals) if self.stats else {}
+        self.logbook.record(gen=self.generation_number, nevals=len(individuals), **record)
         self.logger.debug(self.logbook.stream)
 
+    def evaluate_individuals(self, individuals):
+        return self.evaluator(self.toolbox, individuals)
 
-    def non_evaluated_individuals(self, individuals):
-        return [ind for ind in individuals if not ind.fitness.valid]
-
+    def individuals_to_evaluate(self, individuals):
+        return [i for i in individuals if self.fitness_needs_computing(i)]
 
     def compute_fitnesses(self, individuals):
-        fitnesses = self.toolbox.map(self.toolbox.evaluate, individuals)
-        for individual, fitness in zip(individuals, fitnesses):
+        for individual, fitness in zip(individuals, self.evaluate_individuals(individuals)):
             individual.fitness.values = fitness
-        return len(individuals)
+        return individuals
 
-
-    def evaluate_individuals(self, individuals):
-        self.update_stats(self.compute_fitnesses(self.non_evaluated_individuals(individuals)))
+    def evaluate_and_analyse_individuals(self, individuals):
+        self.update_stats(self.compute_fitnesses(self.individuals_to_evaluate(individuals)))
         self.update_hall_of_fame()
 
+    def evaluate_and_analyse_population(self):
+        self.evaluate_and_analyse_individuals(self.population)
 
-    def evaluate_population(self):
-        self.evaluate_individuals(self.population)
-
-
-    def breed(self):
-        return self.varAnd(self.toolbox.select(self.population, len(self.population)))
-
-
-    def replace_population(self,offspring):
-        self.population[:] = offspring
-
+    def prepare_population(self):
+        self.evaluate_and_analyse_population()
 
     def evolve(self, ngen):
         """This algorithm reproduce the simplest evolutionary algorithm as
@@ -210,29 +200,56 @@ class SimpleEvolutionaryAlgorithm(object):
         .. [Back2000] Back, Fogel and Michalewicz, "Evolutionary Computation 1 :
            Basic Algorithms and Operators", 2000.
         """
-
-        self.evaluate_population()
+        self.prepare_population()
         for self.generation_number in range(1, ngen + 1):
             offspring = self.breed()
-            self.evaluate_individuals(offspring)
-            self.replace_population(offspring)
+            self.evaluate_and_analyse_individuals(offspring)
+            self.new_generation(offspring)
+
+    @abstractmethod
+    def breed(self):
+        pass
+
+    @abstractmethod
+    def new_generation(self, offspring):
+        pass
 
 
-class EvolutionStrategies(SimpleEvolutionaryAlgorithm):
+class SimpleEvolutionaryAlgorithm:
+
+    def breed(self):
+        return self.varAnd(self.toolbox.select(self.population, len(self.population)))
+
+    def new_generation(self, offspring):
+        self.population[:] = offspring
+
+
+EvolutionaryAlgorithm.register(SimpleEvolutionaryAlgorithm)
+
+
+class EvolutionStrategies(EvolutionaryAlgorithm):
+
+    def __init__(self, population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_):
+
+        EvolutionaryAlgorithm.__init__(self, population, toolbox, cxpb, mutpb, stats, halloffame)
+        self.mu = mu
+        self.lambda_ = lambda_
+
+    def prepare_population(self):
+        pass
+
+    def breed(self):
+        return self.varOr(self.lambda_)
+
+
+
+class EvolutionStrategiesMuPlusLambda(EvolutionStrategies):
 
     """
     This is the :math:`(\mu + \lambda)` evolutionary algorithm.
     """
 
-    def __init__(self, population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_):
-        SimpleEvolutionaryAlgorithm.__init__(self, population, toolbox, cxpb, mutpb, stats, halloffame)
-        self.mu = mu
-        self.lambda_ = lambda_
-
-    def breed(self):
-        return self.varOr(self.population, self.lambda_)
-
-    def replace_population(self, offspring):
+    def new_generation(self, offspring):
         self.population[:] = self.toolbox.select(self.population + offspring, self.mu)
 
 
@@ -242,122 +259,114 @@ class EvolutionStrategiesMuCommaLambda(EvolutionStrategies):
     This is the :math:`(\mu~,~\lambda)` evolutionary algorithm.
     """
 
-    def replace_population(self, offspring):
+    def __init__(self, population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_):
+        assert lambda_ >= mu, "lambda must be greater or equal to mu."
+        EvolutionStrategies.__init__(self, population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_)
+
+    def new_generation(self, offspring):
         self.population[:] = self.toolbox.select(offspring, self.mu)
 
 
-class CoevolutionaryAlgorithm(SimpleEvolutionaryAlgorithm):
 
-    def evolve(self, ngen):
+# def eaGenerateUpdate(toolbox, ngen, halloffame=None, stats=None,
+#                      verbose=__debug__):
+#     """This is algorithm implements the ask-tell model proposed in
+#     [Colette2010]_, where ask is called `generate` and tell is called `update`.
+#
+#     :param toolbox: A :class:`~deap.base.Toolbox` that contains the evolution
+#                     operators.
+#     :param ngen: The number of generation.
+#     :param stats: A :class:`~deap.tools.Statistics` object that is updated
+#                   inplace, optional.
+#     :param halloffame: A :class:`~deap.tools.HallOfFame` object that will
+#                        contain the best individuals, optional.
+#     :param verbose: Whether or not to log the statistics.
+#     :returns: The final population
+#     :returns: A class:`~deap.tools.Logbook` with the statistics of the
+#               evolution
+#
+#     The algorithm generates the individuals using the :func:`toolbox.generate`
+#     function and updates the generation method with the :func:`toolbox.update`
+#     function. It returns the optimized population and a
+#     :class:`~deap.tools.Logbook` with the statistics of the evolution. The
+#     logbook will contain the generation number, the number of evalutions for
+#     each generation and the statistics if a :class:`~deap.tools.Statistics` is
+#     given as argument. The pseudocode goes as follow ::
+#
+#         for g in range(ngen):
+#             population = toolbox.generate()
+#             evaluate(population)
+#             toolbox.update(population)
+#
+#     .. [Colette2010] Collette, Y., N. Hansen, G. Pujol, D. Salazar Aponte and
+#        R. Le Riche (2010). On Object-Oriented Programming of Optimizers -
+#        Examples in Scilab. In P. Breitkopf and R. F. Coelho, eds.:
+#        Multidisciplinary Design Optimization in Computational Mechanics,
+#        Wiley, pp. 527-565;
+#
+#     """
+#     logbook = tools.Logbook()
+#     logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
+#
+#     for gen in xrange(ngen):
+#         # Generate a new population
+#         population = toolbox.generate()
+#         # Evaluate the individuals
+#         fitnesses = toolbox.map(toolbox.evaluate, population)
+#         for ind, fit in zip(population, fitnesses):
+#             ind.fitness.values = fit
+#
+#         if halloffame is not None:
+#             halloffame.update(population)
+#
+#         # Update the strategy with the evaluated individuals
+#         toolbox.update(population)
+#
+#         record = stats.compile(population) if stats is not None else {}
+#         logbook.record(gen=gen, nevals=len(population), **record)
+#         if verbose:
+#             print logbook.stream
+#
+#     return population, logbook
 
-        logbook = deap.tools.Logbook()
-        logbook.header = ['gen', 'nevals'] + (self.stats.fields if self.stats else [])
 
-        # Evaluate the individuals with an invalid fitness
-        invalid_ind = [ind for ind in self.population if not ind.fitness.valid]
-        #fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-        fitnesses = self.toolbox.evaluate(self.population)
-        for ind, fit in zip(self.population, fitnesses):
-            ind.fitness.values = fit
-
-        if self.halloffame is not None:
-            self.halloffame.update(self.population)
-
-        record = self.stats.compile(self.population) if self.stats else {}
-        logbook.record(gen=0, nevals=len(invalid_ind), **record)
-        self.logger.debug(logbook.stream)
-
-        history = []
-
-        # Begin the generational process
-        for gen in range(1, ngen + 1):
-            # Select the next generation individuals
-            offspring = self.toolbox.select(self.population, len(self.population))
-
-            # Vary the pool of individuals
-            offspring = self.varAnd()
-
-            # Evaluate the individuals with an invalid fitness
-            #invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            #fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-            fitnesses = self.toolbox.evaluate(offspring)
-            for ind, fit in zip(offspring, fitnesses):
-                ind.fitness.values = fit
-
-            # Update the hall of fame with the generated individuals
-            if self.halloffame is not None:
-                self.halloffame.update(offspring)
-
-            # Replace the current population by the offspring
-            self.population[:] = offspring
-            history.append(self.population[:])
-
-            # Append the current generation statistics to the logbook
-            record = self.stats.compile(self.population) if self.stats else {}
-            logbook.record(gen=gen, nevals=len(invalid_ind), **record)
-            self.logger.debug(logbook.stream)
-
-        return self.population, logbook, history
+def evolutionary_algorithm(args, ngen, Algorithm=SimpleEvolutionaryAlgorithm):
+    """
+    :param population: A list of individuals.
+    :param toolbox: A :class:`~deap.base.Toolbox` that contains the evolution
+                    operators.
+    :param mu: The number of individuals to select for the next generation.
+    :param lambda\_: The number of children to produce at each generation.
+    :param cxpb: The probability that an offspring is produced by crossover.
+    :param mutpb: The probability that an offspring is produced by mutation.
+    :param ngen: The number of generation.
+    :param stats: A :class:`~deap.tools.Statistics` object that is updated
+                  inplace, optional.
+    :param halloffame: A :class:`~deap.tools.HallOfFame` object that will
+                       contain the best individuals, optional.
+    :param verbose: Whether or not to log the statistics.
+    :returns: The final population
+    :returns: A class:`~deap.tools.Logbook` with the statistics of the
+              evolution.
+    """
+    ea = Algorithm(*args)
+    ea.evolve(ngen)
+    return ea.population, ea.logbook
 
 
+def eaSimple(population, toolbox, cxpb, mutpb, ngen, stats=None,
+                 halloffame=None, verbose=__debug__):
+    return evolutionary_algorithm((population, toolbox, cxpb, mutpb, stats, halloffame), ngen)
 
-    # def eaGenerateUpdate(toolbox, ngen, halloffame=None, stats=None,
-    #                      verbose=__debug__):
-    #     """This is algorithm implements the ask-tell model proposed in
-    #     [Colette2010]_, where ask is called `generate` and tell is called `update`.
-    #
-    #     :param toolbox: A :class:`~deap.base.Toolbox` that contains the evolution
-    #                     operators.
-    #     :param ngen: The number of generation.
-    #     :param stats: A :class:`~deap.tools.Statistics` object that is updated
-    #                   inplace, optional.
-    #     :param halloffame: A :class:`~deap.tools.HallOfFame` object that will
-    #                        contain the best individuals, optional.
-    #     :param verbose: Whether or not to log the statistics.
-    #     :returns: The final population
-    #     :returns: A class:`~deap.tools.Logbook` with the statistics of the
-    #               evolution
-    #
-    #     The algorithm generates the individuals using the :func:`toolbox.generate`
-    #     function and updates the generation method with the :func:`toolbox.update`
-    #     function. It returns the optimized population and a
-    #     :class:`~deap.tools.Logbook` with the statistics of the evolution. The
-    #     logbook will contain the generation number, the number of evalutions for
-    #     each generation and the statistics if a :class:`~deap.tools.Statistics` is
-    #     given as argument. The pseudocode goes as follow ::
-    #
-    #         for g in range(ngen):
-    #             population = toolbox.generate()
-    #             evaluate(population)
-    #             toolbox.update(population)
-    #
-    #     .. [Colette2010] Collette, Y., N. Hansen, G. Pujol, D. Salazar Aponte and
-    #        R. Le Riche (2010). On Object-Oriented Programming of Optimizers -
-    #        Examples in Scilab. In P. Breitkopf and R. F. Coelho, eds.:
-    #        Multidisciplinary Design Optimization in Computational Mechanics,
-    #        Wiley, pp. 527-565;
-    #
-    #     """
-    #     logbook = tools.Logbook()
-    #     logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
-    #
-    #     for gen in xrange(ngen):
-    #         # Generate a new population
-    #         population = toolbox.generate()
-    #         # Evaluate the individuals
-    #         fitnesses = toolbox.map(toolbox.evaluate, population)
-    #         for ind, fit in zip(population, fitnesses):
-    #             ind.fitness.values = fit
-    #
-    #         if halloffame is not None:
-    #             halloffame.update(population)
-    #
-    #         # Update the strategy with the evaluated individuals
-    #         toolbox.update(population)
-    #
-    #         record = stats.compile(population) if stats is not None else {}
-    #         logbook.record(gen=gen, nevals=len(population), **record)
-    #         if verbose:
-    #             print logbook.stream
-    #
-    #     return population, logbook
+
+def eaMuPlusLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen,
+                   stats=None, halloffame=None, verbose=__debug__):
+    return evolutionary_algorithm((population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_), ngen,
+                                  Algorithm=EvolutionStrategiesMuPlusLambda)
+
+
+def eaMuCommaLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen,
+                    stats=None, halloffame=None, verbose=__debug__):
+    return evolutionary_algorithm((population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_), ngen,
+                                  Algorithm=EvolutionStrategiesMuCommaLambda)
+
