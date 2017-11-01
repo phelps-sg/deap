@@ -44,6 +44,8 @@ class Toolbox(object):
     def __init__(self):
         self.register("clone", deepcopy)
         self.register("map", map)
+        self.register("group_and_evaluate", lambda toolbox, individuals: toolbox.map(toolbox.evaluate, individuals))
+        self.register("fitness_needs_computing", lambda individual: not individual.fitness.valid)
 
     def register(self, alias, function, *args, **kargs):
         """Register a *function* in the toolbox under the name *alias*. You

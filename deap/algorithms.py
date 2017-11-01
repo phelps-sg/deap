@@ -49,8 +49,8 @@ class EvolutionaryAlgorithm(ABC):
         self.generation_number = 0
         self.logbook = deap.tools.Logbook()
         self.logbook.header = ['gen', 'nevals'] + (self.stats.fields if self.stats else [])
-        self.evaluator = lambda toolbox, individuals: toolbox.map(toolbox.evaluate, individuals)
-        self.fitness_needs_computing = lambda individual: not individual.fitness.valid
+        # self.evaluator = lambda toolbox, individuals: toolbox.map(toolbox.evaluate, individuals)
+        # self.fitness_needs_computing = lambda individual: not individual.fitness.valid
 
     def varOr(self, lambda_):
         """Part of an evolutionary algorithm applying only the variation part
@@ -159,10 +159,10 @@ class EvolutionaryAlgorithm(ABC):
         self.logger.debug(self.logbook.stream)
 
     def evaluate_individuals(self, individuals):
-        return self.evaluator(self.toolbox, individuals)
+        return self.toolbox.group_and_evaluate(self.toolbox, individuals)
 
     def individuals_to_evaluate(self, individuals):
-        return [i for i in individuals if self.fitness_needs_computing(i)]
+        return [i for i in individuals if self.toolbox.fitness_needs_computing(i)]
 
     def compute_fitnesses(self, individuals):
         for individual, fitness in zip(individuals, self.evaluate_individuals(individuals)):
