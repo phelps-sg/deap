@@ -66,7 +66,7 @@ class _HyperVolume:
         """
 
         def weaklyDominates(point, other):
-            for i in xrange(len(point)):
+            for i in range(len(point)):
                 if point[i] > other[i]:
                     return False
             return True
@@ -90,8 +90,8 @@ class _HyperVolume:
             
             #######
             # fmder: Assume relevantPoints are numpy array
-            # for j in xrange(len(relevantPoints)):
-            #     relevantPoints[j] = [relevantPoints[j][i] - referencePoint[i] for i in xrange(dimensions)]
+            # for j in range(len(relevantPoints)):
+            #     relevantPoints[j] = [relevantPoints[j][i] - referencePoint[i] for i in range(dimensions)]
             relevantPoints -= referencePoint
             # fmder
             #######
@@ -154,7 +154,7 @@ class _HyperVolume:
                 hvol = qPrevDimIndex.volume[dimIndex] + qPrevDimIndex.area[dimIndex] * (qCargo[dimIndex] - qPrevDimIndex.cargo[dimIndex])
             else:
                 qArea[0] = 1
-                qArea[1:dimIndex+1] = [qArea[i] * -qCargo[i] for i in xrange(dimIndex)]
+                qArea[1:dimIndex+1] = [qArea[i] * -qCargo[i] for i in range(dimIndex)]
             q.volume[dimIndex] = hvol
             if q.ignore >= dimIndex:
                 qArea[dimIndex] = qPrevDimIndex.area[dimIndex]
@@ -186,7 +186,7 @@ class _HyperVolume:
         dimensions = len(self.referencePoint)
         nodeList = _MultiList(dimensions)
         nodes = [_MultiList.Node(dimensions, point) for point in front]
-        for i in xrange(dimensions):
+        for i in range(dimensions):
             self.sortByDimension(nodes, i)
             nodeList.extend(nodes, i)
         self.list = nodeList
@@ -241,7 +241,7 @@ class _MultiList:
         
     def __str__(self):
         strings = []
-        for i in xrange(self.numberLists):
+        for i in range(self.numberLists):
             currentList = []
             node = self.sentinel.next[i]
             while node != self.sentinel:
@@ -294,7 +294,7 @@ class _MultiList:
         
     def remove(self, node, index, bounds): 
         """Removes and returns 'node' from all lists in [0, 'index'[."""
-        for i in xrange(index): 
+        for i in range(index):
             predecessor = node.prev[i]
             successor = node.next[i]
             predecessor.next[i] = successor
@@ -311,7 +311,7 @@ class _MultiList:
         nodes of the node that is reinserted are in the list.
 
         """
-        for i in xrange(index):
+        for i in range(index):
             node.prev[i].next[i] = node
             node.next[i].prev[i] = node
             if bounds[i] > node.cargo[i]:

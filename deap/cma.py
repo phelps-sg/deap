@@ -24,7 +24,7 @@ import copy
 from math import sqrt, log, exp
 import numpy
 
-import tools
+import deap.tools
 
 
 class Strategy(object):
@@ -389,7 +389,7 @@ class StrategyMultiObjective(object):
         self.pc = [numpy.zeros(self.dim) for _ in range(len(population))]
         self.psucc = [self.ptarg] * len(population)
 
-        self.indicator = params.get("indicator", tools.hypervolume)
+        self.indicator = params.get("indicator", deap.tools.hypervolume)
 
     def generate(self, ind_init):
         """Generate a population of :math:`\lambda` individuals of type
@@ -431,7 +431,7 @@ class StrategyMultiObjective(object):
         if len(candidates) <= self.mu:
             return candidates, []
 
-        pareto_fronts = tools.sortLogNondominated(candidates, len(candidates))
+        pareto_fronts = deap.tools.sortLogNondominated(candidates, len(candidates))
 
         chosen = list()
         mid_front = None

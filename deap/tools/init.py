@@ -20,7 +20,7 @@ def initRepeat(container, func, n):
 
     See the :ref:`list-of-floats` and :ref:`population` tutorials for more examples.
     """
-    return container(func() for _ in xrange(n))
+    return container(func() for _ in range(n))
 
 def initIterate(container, generator):
     """Call the function *container* with an iterable as 
