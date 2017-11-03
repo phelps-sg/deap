@@ -211,6 +211,23 @@ class Statistics(object):
         return entry
 
 
+class CollatingStatistics(object):
+    """
+    Collate statistics from a collection of statistics object into a single superset
+    of key-value pairs.
+    """
+
+    def __init__(self, *stat_collectors):
+        self.stat_collectors = stat_collectors
+        self.fields = [f for fields in [stats.fields for stats in stat_collectors] for f in fields]
+
+    def compile(self, data):
+        results = {}
+        for stats in self.stat_collectors:
+            results.update(stats.compile(data))
+        return results
+
+
 class MultiStatistics(dict):
     """Dictionary of :class:`Statistics` object allowing to compute
     statistics on multiple keys using a single call to :meth:`compile`. It
@@ -638,7 +655,7 @@ class ParetoFront(HallOfFame):
                 self.insert(ind)
 
 
-__all__ = ['HallOfFame', 'ParetoFront', 'History', 'Statistics', 'MultiStatistics', 'Logbook']
+__all__ = ['HallOfFame', 'ParetoFront', 'History', 'Statistics', 'MultiStatistics', 'CollatingStatistics', 'Logbook']
 
 if __name__ == "__main__":
     import doctest
