@@ -31,12 +31,11 @@ import deap.tools
 
 from abc import ABC, abstractmethod
 
-LOG_FORMAT = '%(asctime)-15s %(message)s'
-
-logging.basicConfig(format=LOG_FORMAT, level=logging.DEBUG)
-
 
 class EvolutionaryAlgorithm(ABC):
+    """
+    Abstract Base Class (ABC) for all evolutionary algorithms.
+    """
 
     def __init__(self, population, toolbox, cxpb, mutpb, stats, halloffame):
         self.population = population
@@ -49,8 +48,6 @@ class EvolutionaryAlgorithm(ABC):
         self.generation_number = 0
         self.logbook = deap.tools.Logbook()
         self.logbook.header = ['gen', 'nevals'] + (self.stats.fields if self.stats else [])
-        # self.evaluator = lambda toolbox, individuals: toolbox.map(toolbox.evaluate, individuals)
-        # self.fitness_needs_computing = lambda individual: not individual.fitness.valid
 
     def varOr(self, lambda_):
         """Part of an evolutionary algorithm applying only the variation part
@@ -179,29 +176,9 @@ class EvolutionaryAlgorithm(ABC):
     def prepare_population(self):
         self.evaluate_and_analyse_population()
 
-    def evolve(self, ngen):
-        """This algorithm reproduce the simplest evolutionary algorithm as
-        presented in chapter 7 of [Back2000]_.
-
-        :param ngen: The number of generation.
-
-        The algorithm takes in a population and evolves it in place using the
-        :meth:`varAnd` method.
-
-        .. note::
-
-            Using a non-stochastic selection method will result in no selection as
-            the operator selects *n* individuals from a pool of *n*.
-
-        This function expects the :meth:`toolbox.mate`, :meth:`toolbox.mutate`,
-        :meth:`toolbox.select` and :meth:`toolbox.evaluate` aliases to be
-        registered in the toolbox.
-
-        .. [Back2000] Back, Fogel and Michalewicz, "Evolutionary Computation 1 :
-           Basic Algorithms and Operators", 2000.
-        """
+    def evolve(self, max_generations):
         self.prepare_population()
-        for self.generation_number in range(1, ngen + 1):
+        for self.generation_number in range(1, max_generations + 1):
             offspring = self.breed()
             self.evaluate_and_analyse_individuals(offspring)
             self.new_generation(offspring)
@@ -216,6 +193,27 @@ class EvolutionaryAlgorithm(ABC):
 
 
 class SimpleEvolutionaryAlgorithm:
+    """
+       This algorithm implements the simplest evolutionary algorithm as
+       presented in chapter 7 of [Back2000]_.
+
+       :param ngen: The number of generation.
+
+       The algorithm takes in a population and evolves it in place using the
+       :meth:`varAnd` method.
+
+       .. note::
+
+           Using a non-stochastic selection method will result in no selection as
+           the operator selects *n* individuals from a pool of *n*.
+
+       This function expects the :meth:`toolbox.mate`, :meth:`toolbox.mutate`,
+       :meth:`toolbox.select` and :meth:`toolbox.evaluate` aliases to be
+       registered in the toolbox.
+
+       .. [Back2000] Back, Fogel and Michalewicz, "Evolutionary Computation 1 :
+          Basic Algorithms and Operators", 2000.
+    """
 
     def breed(self):
         return self.varAnd(self.toolbox.select(self.population, len(self.population)))
@@ -224,13 +222,12 @@ class SimpleEvolutionaryAlgorithm:
         self.population[:] = offspring
 
 
-EvolutionaryAlgorithm.register(SimpleEvolutionaryAlgorithm)
-
-
 class EvolutionStrategies(EvolutionaryAlgorithm):
+    """
+    Abstract superclass of all algorithms implementing evolution strategies.
+    """
 
     def __init__(self, population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_):
-
         EvolutionaryAlgorithm.__init__(self, population, toolbox, cxpb, mutpb, stats, halloffame)
         self.mu = mu
         self.lambda_ = lambda_
@@ -238,13 +235,20 @@ class EvolutionStrategies(EvolutionaryAlgorithm):
     def prepare_population(self):
         pass
 
+    def evaluate_and_analyse_individuals(self, individuals):
+        self.compute_fitnesses(self.individuals_to_evaluate(individuals))
+        self.update_stats([i for i in self.population if i.fitness.valid])
+        self.update_hall_of_fame()
+
     def breed(self):
         return self.varOr(self.lambda_)
 
+    @abstractmethod
+    def new_generation(self, offspring):
+        pass
 
 
 class EvolutionStrategiesMuPlusLambda(EvolutionStrategies):
-
     """
     This is the :math:`(\mu + \lambda)` evolutionary algorithm.
     """
@@ -254,7 +258,6 @@ class EvolutionStrategiesMuPlusLambda(EvolutionStrategies):
 
 
 class EvolutionStrategiesMuCommaLambda(EvolutionStrategies):
-
     """
     This is the :math:`(\mu~,~\lambda)` evolutionary algorithm.
     """
@@ -265,7 +268,6 @@ class EvolutionStrategiesMuCommaLambda(EvolutionStrategies):
 
     def new_generation(self, offspring):
         self.population[:] = self.toolbox.select(offspring, self.mu)
-
 
 
 # def eaGenerateUpdate(toolbox, ngen, halloffame=None, stats=None,
@@ -330,7 +332,36 @@ class EvolutionStrategiesMuCommaLambda(EvolutionStrategies):
 #     return population, logbook
 
 
-def evolutionary_algorithm(args, ngen, Algorithm=SimpleEvolutionaryAlgorithm):
+def evolutionary_algorithm(*params, max_generations, Algorithm=SimpleEvolutionaryAlgorithm):
+    """
+    :param population: A list of individuals.
+    :param toolbox: A :class:`~deap.base.Toolbox` that contains the evolution
+                    operators.
+    :param cxpb: The probability that an offspring is produced by crossover.
+    :param mutpb: The probability that an offspring is produced by mutation.
+    :param ngen: The number of generation.
+    :param stats: A :class:`~deap.tools.Statistics` object that is updated
+                  inplace, optional.
+    :param halloffame: A :class:`~deap.tools.HallOfFame` object that will
+                       contain the best individuals, optional.
+    :param verbose: Whether or not to log the statistics.
+    :returns: The final population
+    :returns: A class:`~deap.tools.Logbook` with the statistics of the
+              evolution.
+    """
+    ea = Algorithm(*params)
+    ea.evolve(max_generations)
+    return ea.population, ea.logbook
+
+
+def eaSimple(population, toolbox, cxpb, mutpb, ngen, stats=None,
+                 halloffame=None, verbose=__debug__):
+    return evolutionary_algorithm(population, toolbox, cxpb, mutpb, stats, halloffame,
+                                  max_generations=ngen)
+
+
+def eaMuPlusLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen,
+                   stats=None, halloffame=None, verbose=__debug__):
     """
     :param population: A list of individuals.
     :param toolbox: A :class:`~deap.base.Toolbox` that contains the evolution
@@ -349,24 +380,30 @@ def evolutionary_algorithm(args, ngen, Algorithm=SimpleEvolutionaryAlgorithm):
     :returns: A class:`~deap.tools.Logbook` with the statistics of the
               evolution.
     """
-    ea = Algorithm(*args)
-    ea.evolve(ngen)
-    return ea.population, ea.logbook
-
-
-def eaSimple(population, toolbox, cxpb, mutpb, ngen, stats=None,
-                 halloffame=None, verbose=__debug__):
-    return evolutionary_algorithm((population, toolbox, cxpb, mutpb, stats, halloffame), ngen)
-
-
-def eaMuPlusLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen,
-                   stats=None, halloffame=None, verbose=__debug__):
-    return evolutionary_algorithm((population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_), ngen,
-                                  Algorithm=EvolutionStrategiesMuPlusLambda)
+    return evolutionary_algorithm(population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_,
+                                  max_generations=ngen, Algorithm=EvolutionStrategiesMuPlusLambda)
 
 
 def eaMuCommaLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen,
                     stats=None, halloffame=None, verbose=__debug__):
-    return evolutionary_algorithm((population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_), ngen,
-                                  Algorithm=EvolutionStrategiesMuCommaLambda)
+    """
+    :param population: A list of individuals.
+    :param toolbox: A :class:`~deap.base.Toolbox` that contains the evolution
+                    operators.
+    :param mu: The number of individuals to select for the next generation.
+    :param lambda\_: The number of children to produce at each generation.
+    :param cxpb: The probability that an offspring is produced by crossover.
+    :param mutpb: The probability that an offspring is produced by mutation.
+    :param ngen: The number of generation.
+    :param stats: A :class:`~deap.tools.Statistics` object that is updated
+                  inplace, optional.
+    :param halloffame: A :class:`~deap.tools.HallOfFame` object that will
+                       contain the best individuals, optional.
+    :param verbose: Whether or not to log the statistics.
+    :returns: The final population
+    :returns: A class:`~deap.tools.Logbook` with the statistics of the
+              evolution.
+    """
+    return evolutionary_algorithm(population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_,
+                                  max_generations=ngen, Algorithm=EvolutionStrategiesMuCommaLambda)
 
