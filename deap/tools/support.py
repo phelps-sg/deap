@@ -18,6 +18,7 @@ def identity(obj):
     """
     return obj
 
+
 class History(object):
     """The :class:`History` class helps to build a genealogy of all the
     individuals produced in the evolution. It contains two attributes,
@@ -151,6 +152,7 @@ class History(object):
         genealogy(individual.history_index, 0)
         return gtree
 
+
 class Statistics(object):
     """Object that compiles statistics on a list of arbitrary objects. 
     When created the statistics object receives a *key* argument that 
@@ -208,6 +210,7 @@ class Statistics(object):
             entry[key] = func(values)
         return entry
 
+
 class MultiStatistics(dict):
     """Dictionary of :class:`Statistics` object allowing to compute
     statistics on multiple keys using a single call to :meth:`compile`. It
@@ -254,6 +257,7 @@ class MultiStatistics(dict):
         """
         for stats in self.values():
             stats.register(name, function, *args, **kargs)
+
 
 class Logbook(list):
     """Evolution records as a chronological list of dictionaries.
@@ -632,6 +636,7 @@ class ParetoFront(HallOfFame):
                 self.remove(i)
             if not is_dominated and not has_twin:
                 self.insert(ind)
+
 
 __all__ = ['HallOfFame', 'ParetoFront', 'History', 'Statistics', 'MultiStatistics', 'Logbook']
 
