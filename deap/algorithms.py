@@ -29,13 +29,14 @@ import random
 import logging
 import deap.tools
 
-from abc import ABC, abstractmethod
+from abc import ABCMeta, abstractmethod
 
 
-class EvolutionaryAlgorithm(ABC):
+class EvolutionaryAlgorithm:
     """
     Abstract Base Class (ABC) for all evolutionary algorithms.
     """
+    __metaclass__ = ABCMeta
 
     def __init__(self, population, toolbox, cxpb, mutpb, stats, halloffame):
         self.population = population
@@ -332,7 +333,7 @@ class EvolutionStrategiesMuCommaLambda(EvolutionStrategies):
 #     return population, logbook
 
 
-def evolutionary_algorithm(*params, max_generations, Algorithm=SimpleEvolutionaryAlgorithm):
+def evolutionary_algorithm(max_generations, Algorithm, *params): #, max_generations, Algorithm=SimpleEvolutionaryAlgorithm):
     """
     :param population: A list of individuals.
     :param toolbox: A :class:`~deap.base.Toolbox` that contains the evolution
@@ -356,8 +357,8 @@ def evolutionary_algorithm(*params, max_generations, Algorithm=SimpleEvolutionar
 
 def eaSimple(population, toolbox, cxpb, mutpb, ngen, stats=None,
                  halloffame=None, verbose=__debug__):
-    return evolutionary_algorithm(population, toolbox, cxpb, mutpb, stats, halloffame,
-                                  max_generations=ngen)
+    return evolutionary_algorithm(ngen, SimpleEvolutionaryAlgorithm,
+                                  population, toolbox, cxpb, mutpb, stats, halloffame)
 
 
 def eaMuPlusLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen,
@@ -380,8 +381,8 @@ def eaMuPlusLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen,
     :returns: A class:`~deap.tools.Logbook` with the statistics of the
               evolution.
     """
-    return evolutionary_algorithm(population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_,
-                                  max_generations=ngen, Algorithm=EvolutionStrategiesMuPlusLambda)
+    return evolutionary_algorithm(ngen, EvolutionStrategiesMuPlusLambda,
+                                  population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_)
 
 
 def eaMuCommaLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen,
@@ -404,6 +405,7 @@ def eaMuCommaLambda(population, toolbox, mu, lambda_, cxpb, mutpb, ngen,
     :returns: A class:`~deap.tools.Logbook` with the statistics of the
               evolution.
     """
-    return evolutionary_algorithm(population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_,
-                                  max_generations=ngen, Algorithm=EvolutionStrategiesMuCommaLambda)
+    return evolutionary_algorithm(ngen, EvolutionStrategiesMuCommaLambda,
+                                  population, toolbox, cxpb, mutpb, stats, halloffame, mu, lambda_)
+
 
